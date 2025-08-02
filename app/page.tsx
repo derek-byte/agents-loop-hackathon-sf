@@ -1,9 +1,14 @@
+"use client";
+
 import Link from "next/link";
+import { useState, useMemo } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import AgentCardVercel from "@/components/agents/AgentCardVercel";
 
 export default function Home() {
-  const agents = [
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [agents, setAgents] = useState([
     {
       name: "Benefits Assistant",
       description: "Handles employee benefits inquiries and enrollment",
@@ -40,7 +45,25 @@ export default function Home() {
       status: "active" as const,
       lastActive: "5 minutes ago",
     },
-  ];
+  ]);
+
+  const handleDeleteAgent = (agentName: string) => {
+    if (confirm(`Are you sure you want to delete "${agentName}"?`)) {
+      setAgents(agents.filter(agent => agent.name !== agentName));
+    }
+  };
+
+  // Filter agents based on search query and status filter
+  const filteredAgents = useMemo(() => {
+    return agents.filter((agent) => {
+      const matchesSearch = agent.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          agent.description.toLowerCase().includes(searchQuery.toLowerCase());
+      
+      const matchesFilter = filterStatus === "all" || agent.status === filterStatus;
+      
+      return matchesSearch && matchesFilter;
+    });
+  }, [searchQuery, filterStatus, agents]);
 
   return (
     <AppLayout>
@@ -62,30 +85,65 @@ export default function Home() {
         </div>
       </div>
 
-      <div className="mb-6 flex items-center gap-4">
-        <div className="relative flex-1">
-          <input
-            type="text"
-            placeholder="Search agents..."
-            className="w-full rounded-md border border-gray-800 bg-gray-950 px-4 py-2 pl-10 text-sm text-white placeholder-gray-500 focus:border-gray-700 focus:outline-none"
-          />
-          <svg className="absolute left-3 top-2.5 h-5 w-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
+      <div className="mb-6">
+        <div className="flex items-center gap-4 mb-3">
+          <div className="relative flex-1">
+            <input
+              type="text"
+              placeholder="Search agents..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full rounded-md border border-gray-800 bg-gray-950 px-4 py-2 pl-10 text-sm text-white placeholder-gray-500 focus:border-gray-700 focus:outline-none"
+            />
+            <svg className="absolute left-3 top-2.5 h-5 w-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </div>
+          
+          <select 
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+            className="rounded-md border border-gray-800 bg-gray-950 px-4 py-2 text-sm text-white focus:border-gray-700 focus:outline-none appearance-none"
+          >
+            <option value="all">All Agents</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+            <option value="training">Training</option>
+          </select>
         </div>
         
-        <select className="rounded-md border border-gray-800 bg-gray-950 px-4 py-2 text-sm text-white focus:border-gray-700 focus:outline-none appearance-none">
-          <option>All Agents</option>
-          <option>Active</option>
-          <option>Inactive</option>
-          <option>Training</option>
-        </select>
+        {(searchQuery || filterStatus !== "all") && (
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-gray-400">
+              Showing {filteredAgents.length} of {agents.length} agents
+            </p>
+            <button
+              onClick={() => {
+                setSearchQuery("");
+                setFilterStatus("all");
+              }}
+              className="text-sm text-primary-400 hover:text-primary-300"
+            >
+              Clear filters
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {agents.map((agent, index) => (
-          <AgentCardVercel key={index} {...agent} />
-        ))}
+        {filteredAgents.length > 0 ? (
+          filteredAgents.map((agent, index) => (
+            <AgentCardVercel 
+              key={index} 
+              {...agent} 
+              onDelete={() => handleDeleteAgent(agent.name)}
+            />
+          ))
+        ) : (
+          <div className="col-span-full text-center py-12">
+            <p className="text-gray-400">No agents found matching your criteria.</p>
+          </div>
+        )}
       </div>
 
       <div className="mt-12 rounded-lg border border-gray-800 bg-gradient-to-r from-gray-950 to-gray-900 p-8 text-center">
