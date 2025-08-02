@@ -1,56 +1,68 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import AgentCardVercel from "@/components/agents/AgentCardVercel";
+
+interface Agent {
+  id: string;
+  name: string;
+  description: string;
+  status: "active" | "inactive" | "training";
+  created_at: string;
+  updated_at: string;
+}
 
 export default function Home() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
-  const [agents, setAgents] = useState([
-    {
-      name: "Benefits Assistant",
-      description: "Handles employee benefits inquiries and enrollment",
-      status: "active" as const,
-      lastActive: "2 minutes ago",
-    },
-    {
-      name: "Onboarding Guide",
-      description: "Assists new employees with onboarding process",
-      status: "active" as const,
-      lastActive: "1 hour ago",
-    },
-    {
-      name: "Policy Expert",
-      description: "Answers questions about company policies",
-      status: "training" as const,
-      lastActive: "3 hours ago",
-    },
-    {
-      name: "Leave Manager",
-      description: "Manages PTO requests and leave balances",
-      status: "active" as const,
-      lastActive: "30 minutes ago",
-    },
-    {
-      name: "Performance Coach",
-      description: "Provides guidance on performance reviews",
-      status: "inactive" as const,
-      lastActive: "2 days ago",
-    },
-    {
-      name: "Payroll Assistant",
-      description: "Helps with payroll inquiries and issues",
-      status: "active" as const,
-      lastActive: "5 minutes ago",
-    },
-  ]);
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const handleDeleteAgent = (agentName: string) => {
-    if (confirm(`Are you sure you want to delete "${agentName}"?`)) {
-      setAgents(agents.filter(agent => agent.name !== agentName));
+  useEffect(() => {
+    fetchAgents();
+  }, []);
+
+  const fetchAgents = async () => {
+    try {
+      const response = await fetch('/api/agents');
+      if (!response.ok) throw new Error('Failed to fetch agents');
+      const data = await response.json();
+      setAgents(data);
+    } catch (error) {
+      console.error('Error fetching agents:', error);
+    } finally {
+      setIsLoading(false);
     }
+  };
+
+  const handleDeleteAgent = async (agentId: string, agentName: string) => {
+    if (confirm(`Are you sure you want to delete "${agentName}"?`)) {
+      try {
+        const response = await fetch(`/api/agents/${agentId}`, {
+          method: 'DELETE',
+        });
+        
+        if (!response.ok) throw new Error('Failed to delete agent');
+        
+        setAgents(agents.filter(agent => agent.id !== agentId));
+      } catch (error) {
+        console.error('Error deleting agent:', error);
+        alert('Failed to delete agent. Please try again.');
+      }
+    }
+  };
+
+  const getRelativeTime = (date: string) => {
+    const now = new Date();
+    const past = new Date(date);
+    const diffInSeconds = Math.floor((now.getTime() - past.getTime()) / 1000);
+    
+    if (diffInSeconds < 60) return 'Just now';
+    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} minutes ago`;
+    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} hours ago`;
+    return `${Math.floor(diffInSeconds / 86400)} days ago`;
   };
 
   // Filter agents based on search query and status filter
@@ -131,17 +143,28 @@ export default function Home() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {filteredAgents.length > 0 ? (
-          filteredAgents.map((agent, index) => (
+        {isLoading ? (
+          <div className="col-span-full text-center py-12">
+            <p className="text-gray-400">Loading agents...</p>
+          </div>
+        ) : filteredAgents.length > 0 ? (
+          filteredAgents.map((agent) => (
             <AgentCardVercel 
-              key={index} 
-              {...agent} 
-              onDelete={() => handleDeleteAgent(agent.name)}
+              key={agent.id} 
+              name={agent.name}
+              description={agent.description || ''}
+              status={agent.status}
+              lastActive={getRelativeTime(agent.updated_at)}
+              onDelete={() => handleDeleteAgent(agent.id, agent.name)}
             />
           ))
         ) : (
           <div className="col-span-full text-center py-12">
-            <p className="text-gray-400">No agents found matching your criteria.</p>
+            <p className="text-gray-400">
+              {agents.length === 0 
+                ? "No agents yet. Create your first agent to get started." 
+                : "No agents found matching your criteria."}
+            </p>
           </div>
         )}
       </div>

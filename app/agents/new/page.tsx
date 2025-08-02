@@ -3,16 +3,21 @@
 import { useState } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 export default function NewAgentPage() {
+  const router = useRouter();
   const [step, setStep] = useState(1);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     description: "",
     template: "",
     personality: "professional",
-    responseStyle: "balanced",
-    knowledge: "",
+    response_style: "balanced",
+    knowledge_base: "",
+    company_context: "",
+    welcome_message: "",
   });
 
   const templates = [
@@ -48,6 +53,35 @@ export default function NewAgentPage() {
 
   const handleBack = () => {
     if (step > 1) setStep(step - 1);
+  };
+
+  const handleCreateAgent = async () => {
+    setIsSubmitting(true);
+    
+    try {
+      const response = await fetch('/api/agents', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ...formData,
+          status: 'active',
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to create agent');
+      }
+
+      const agent = await response.json();
+      router.push('/');
+    } catch (error) {
+      console.error('Error creating agent:', error);
+      alert('Failed to create agent. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -177,8 +211,8 @@ export default function NewAgentPage() {
                       Response style
                     </label>
                     <select
-                      value={formData.responseStyle}
-                      onChange={(e) => setFormData({ ...formData, responseStyle: e.target.value })}
+                      value={formData.response_style}
+                      onChange={(e) => setFormData({ ...formData, response_style: e.target.value })}
                       className="w-full rounded-md border border-gray-800 bg-black px-4 py-2 text-white focus:border-white focus:outline-none"
                     >
                       <option value="balanced">Balanced</option>
@@ -200,8 +234,8 @@ export default function NewAgentPage() {
                   Company context
                 </label>
                 <textarea
-                  value={formData.knowledge}
-                  onChange={(e) => setFormData({ ...formData, knowledge: e.target.value })}
+                  value={formData.knowledge_base}
+                  onChange={(e) => setFormData({ ...formData, knowledge_base: e.target.value })}
                   rows={8}
                   className="w-full rounded-md border border-gray-800 bg-black px-4 py-2 font-mono text-sm text-white placeholder-gray-500 focus:border-white focus:outline-none"
                   placeholder="Paste your company policies, procedures, and documentation here..."
@@ -255,8 +289,12 @@ export default function NewAgentPage() {
                 Continue
               </button>
             ) : (
-              <button className="rounded-md bg-white px-4 py-2 text-sm font-medium text-black hover:opacity-90">
-                Create agent
+              <button 
+                onClick={handleCreateAgent}
+                disabled={isSubmitting}
+                className="rounded-md bg-white px-4 py-2 text-sm font-medium text-black hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSubmitting ? 'Creating...' : 'Create agent'}
               </button>
             )}
           </div>
