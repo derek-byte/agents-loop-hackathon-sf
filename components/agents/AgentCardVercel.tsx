@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
 
 interface AgentCardProps {
+  id: string;
   name: string;
   description: string;
   status: "active" | "inactive" | "training";
@@ -12,6 +14,7 @@ interface AgentCardProps {
 }
 
 export default function AgentCardVercel({
+  id,
   name,
   description,
   status,
@@ -19,6 +22,7 @@ export default function AgentCardVercel({
   conversationCount = 0,
   onDelete
 }: AgentCardProps) {
+  const router = useRouter();
   const [showMenu, setShowMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -41,8 +45,20 @@ export default function AgentCardVercel({
     };
   }, []);
 
+  const handleCardClick = () => {
+    if (status === 'active') {
+      router.push(`/agents/${id}/chat`);
+    }
+  };
+
   return (
-    <div className="group relative rounded-lg border border-gray-800 bg-gray-950 p-6 transition-all hover:border-gray-700">
+    <div 
+      className={`group relative rounded-lg border border-gray-800 bg-gray-950 p-6 transition-all hover:border-gray-700 ${
+        status === 'active' ? 'cursor-pointer hover:shadow-lg hover:shadow-primary-500/10' : 'opacity-75'
+      }`}
+      onClick={handleCardClick}
+      title={status === 'active' ? 'Click to start voice conversation' : 'Agent is not active'}
+    >
       <div className="flex items-start justify-between">
         <div className="flex-1">
           <div className="flex items-center gap-3 mb-2">
@@ -54,7 +70,10 @@ export default function AgentCardVercel({
         
         <div className="relative" ref={menuRef}>
           <button 
-            onClick={() => setShowMenu(!showMenu)}
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowMenu(!showMenu);
+            }}
             className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-white p-1 rounded hover:bg-gray-800"
           >
             <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">

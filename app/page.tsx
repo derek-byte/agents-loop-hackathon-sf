@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState, useMemo, useEffect } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import AgentCardVercel from "@/components/agents/AgentCardVercel";
+import { useDeletedAgents } from "@/contexts/DeletedAgentsContext";
 
 interface Agent {
   id: string;
@@ -11,6 +12,7 @@ interface Agent {
   description: string;
   status: "active" | "inactive" | "training";
   conversation_count?: number;
+  system_prompt?: string;
   created_at: string;
   updated_at: string;
 }
@@ -20,12 +22,14 @@ export default function Home() {
   const [filterStatus, setFilterStatus] = useState("all");
   const [agents, setAgents] = useState<Agent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { markAsDeleted } = useDeletedAgents();
 
   useEffect(() => {
     fetchAgents();
   }, []);
 
   const fetchAgents = async () => {
+    console.log('fetchAgents called - this should only happen on mount');
     try {
       const response = await fetch('/api/agents');
       if (!response.ok) throw new Error('Failed to fetch agents');
@@ -40,14 +44,26 @@ export default function Home() {
 
   const handleDeleteAgent = async (agentId: string, agentName: string) => {
     if (confirm(`Are you sure you want to delete "${agentName}"?`)) {
+      // Optimistically remove from UI first
+      const previousAgents = agents;
+      setAgents(agents.filter(agent => agent.id !== agentId));
+      
+      // Mark as deleted globally to prevent fetching
+      markAsDeleted(agentId);
+      
       try {
         const response = await fetch(`/api/agents/${agentId}`, {
           method: 'DELETE',
         });
         
-        if (!response.ok) throw new Error('Failed to delete agent');
+        if (!response.ok) {
+          // Revert on failure
+          setAgents(previousAgents);
+          throw new Error('Failed to delete agent');
+        }
         
-        setAgents(agents.filter(agent => agent.id !== agentId));
+        // Success - agent already removed from UI
+        console.log(`Agent "${agentName}" deleted successfully`);
       } catch (error) {
         console.error('Error deleting agent:', error);
         alert('Failed to delete agent. Please try again.');
@@ -151,7 +167,8 @@ export default function Home() {
         ) : filteredAgents.length > 0 ? (
           filteredAgents.map((agent) => (
             <AgentCardVercel 
-              key={agent.id} 
+              key={agent.id}
+              id={agent.id}
               name={agent.name}
               description={agent.description || ''}
               status={agent.status}

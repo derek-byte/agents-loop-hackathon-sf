@@ -1,18 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import AppLayout from "@/components/layout/AppLayout";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 export default function NewAgentPage() {
   const router = useRouter();
-  const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     description: "",
-    template: "",
     personality: "professional",
     response_style: "balanced",
     knowledge_base: "",
@@ -20,54 +17,72 @@ export default function NewAgentPage() {
     welcome_message: "",
   });
 
-  const templates = [
-    {
-      id: "benefits",
-      name: "Benefits Assistant",
-      description: "Pre-configured for handling employee benefits inquiries",
-      icon: "🏥",
-    },
-    {
-      id: "onboarding",
-      name: "Onboarding Guide",
-      description: "Optimized for new employee orientation",
-      icon: "👋",
-    },
-    {
-      id: "policy",
-      name: "Policy Expert",
-      description: "Trained on company policies and procedures",
-      icon: "📋",
-    },
-    {
-      id: "custom",
-      name: "Custom Agent",
-      description: "Start from scratch with full customization",
-      icon: "🛠️",
-    },
-  ];
+  const [errors, setErrors] = useState<{[key: string]: string}>({});
 
-  const handleNext = () => {
-    if (step < 3) setStep(step + 1);
+  const validateForm = () => {
+    const newErrors: {[key: string]: string} = {};
+    
+    if (!formData.name.trim()) {
+      newErrors.name = "Agent name is required";
+    }
+    if (!formData.description.trim()) {
+      newErrors.description = "Description is required";
+    }
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
 
-  const handleBack = () => {
-    if (step > 1) setStep(step - 1);
+  // Function to enhance agent data with Claude
+  const enhanceAgentWithClaude = async (agentData: any) => {
+    try {
+      const response = await fetch('/api/agents/enhance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agent: agentData }),
+      });
+      
+      if (response.ok) {
+        const enhanced = await response.json();
+        console.log('Agent enhanced successfully');
+        return enhanced;
+      } else {
+        console.warn('Enhancement failed, using original data');
+      }
+    } catch (error) {
+      console.error('Failed to enhance with Claude:', error);
+    }
+    return agentData; // Return original if enhancement fails
   };
 
-  const handleCreateAgent = async () => {
+  const handleCreateAgent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!validateForm()) {
+      return;
+    }
+    
     setIsSubmitting(true);
     
     try {
+      // Step 1: Prepare agent data
+      let agentData = {
+        ...formData,
+        status: 'active',
+        welcome_message: formData.welcome_message || `Hello! I'm ${formData.name}. How can I help you today?`,
+      };
+      
+      // Step 2: Enhance with Claude
+      console.log('Enhancing agent with Claude...');
+      agentData = await enhanceAgentWithClaude(agentData);
+      
+      // Step 3: Create agent
       const response = await fetch('/api/agents', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          ...formData,
-          status: 'active',
-        }),
+        body: JSON.stringify(agentData),
       });
 
       if (!response.ok) {
@@ -85,221 +100,188 @@ export default function NewAgentPage() {
   };
 
   return (
-    <AppLayout>
-      <div className="mx-auto max-w-3xl">
-        <div className="mb-8">
-          <Link href="/" className="inline-flex items-center text-sm text-gray-400 hover:text-white mb-4">
+    <div className="min-h-screen bg-black">
+      <nav className="border-b border-gray-800">
+        <div className="px-8 py-4">
+          <Link href="/" className="inline-flex items-center text-sm text-gray-400 hover:text-white">
             <svg className="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>
-            Back to agents
+            Back to Dashboard
           </Link>
-          
-          <h1 className="text-3xl font-semibold text-white">Create a new agent</h1>
-          <p className="mt-2 text-sm text-gray-400">
-            Set up an AI-powered HR assistant for your team
+        </div>
+      </nav>
+      
+      <div className="mx-auto max-w-3xl px-8 py-12">
+        <div className="mb-12">
+          <h1 className="text-4xl font-bold text-white">Create a new agent</h1>
+          <p className="mt-3 text-lg text-gray-400">
+            Configure an AI-powered HR assistant for your team
           </p>
         </div>
 
-        <div className="mb-8">
-          <div className="flex items-center">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="flex items-center">
-                <div
-                  className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium ${
-                    i < step
-                      ? "bg-white text-black"
-                      : i === step
-                      ? "bg-gray-800 text-white ring-2 ring-white"
-                      : "bg-gray-800 text-gray-500"
-                  }`}
-                >
-                  {i < step ? (
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                  ) : (
-                    i
-                  )}
-                </div>
-                {i < 3 && (
-                  <div className={`h-px w-16 ${i < step ? "bg-white" : "bg-gray-800"}`} />
-                )}
+        <form onSubmit={handleCreateAgent} className="space-y-12">
+          {/* Basic Information */}
+          <div className="border-b border-gray-800 pb-12">
+            <h2 className="text-2xl font-semibold text-white mb-8">Basic Information</h2>
+            <div className="space-y-6">
+              <div>
+                <label htmlFor="name" className="block text-sm font-medium text-white mb-2">
+                  Agent Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  id="name"
+                  type="text"
+                  value={formData.name}
+                  onChange={(e) => {
+                    setFormData({ ...formData, name: e.target.value });
+                    if (errors.name) setErrors({ ...errors, name: '' });
+                  }}
+                  className={`w-full rounded-lg border ${errors.name ? 'border-red-500' : 'border-gray-800'} bg-gray-950 px-4 py-3 text-white placeholder-gray-500 focus:border-white focus:outline-none focus:ring-1 focus:ring-white`}
+                  placeholder="e.g., HR Benefits Assistant"
+                />
+                {errors.name && <p className="mt-2 text-sm text-red-500">{errors.name}</p>}
               </div>
-            ))}
-          </div>
-          <div className="mt-2 flex justify-between text-xs text-gray-500">
-            <span>Choose template</span>
-            <span className="ml-12">Configure agent</span>
-            <span>Add knowledge</span>
-          </div>
-        </div>
 
-        <div className="rounded-lg border border-gray-800 bg-gray-950 p-8">
-          {step === 1 && (
-            <div>
-              <h2 className="text-xl font-medium text-white mb-6">Choose a template</h2>
-              <div className="grid gap-4 sm:grid-cols-2">
-                {templates.map((template) => (
-                  <button
-                    key={template.id}
-                    onClick={() => setFormData({ ...formData, template: template.id })}
-                    className={`rounded-lg border p-6 text-left transition-all ${
-                      formData.template === template.id
-                        ? "border-white bg-gray-900"
-                        : "border-gray-800 hover:border-gray-700"
-                    }`}
-                  >
-                    <div className="mb-3 text-2xl">{template.icon}</div>
-                    <h3 className="font-medium text-white">{template.name}</h3>
-                    <p className="mt-1 text-sm text-gray-400">{template.description}</p>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {step === 2 && (
-            <div>
-              <h2 className="text-xl font-medium text-white mb-6">Configure your agent</h2>
-              <div className="space-y-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Agent name
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="w-full rounded-md border border-gray-800 bg-black px-4 py-2 text-white placeholder-gray-500 focus:border-white focus:outline-none"
-                    placeholder="e.g., Benefits Assistant"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Description
-                  </label>
-                  <textarea
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    rows={3}
-                    className="w-full rounded-md border border-gray-800 bg-black px-4 py-2 text-white placeholder-gray-500 focus:border-white focus:outline-none"
-                    placeholder="Describe what this agent will help with..."
-                  />
-                </div>
-
-                <div className="grid gap-6 sm:grid-cols-2">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                      Personality
-                    </label>
-                    <select
-                      value={formData.personality}
-                      onChange={(e) => setFormData({ ...formData, personality: e.target.value })}
-                      className="w-full rounded-md border border-gray-800 bg-black px-4 py-2 text-white focus:border-white focus:outline-none"
-                    >
-                      <option value="professional">Professional</option>
-                      <option value="friendly">Friendly</option>
-                      <option value="empathetic">Empathetic</option>
-                      <option value="direct">Direct</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                      Response style
-                    </label>
-                    <select
-                      value={formData.response_style}
-                      onChange={(e) => setFormData({ ...formData, response_style: e.target.value })}
-                      className="w-full rounded-md border border-gray-800 bg-black px-4 py-2 text-white focus:border-white focus:outline-none"
-                    >
-                      <option value="balanced">Balanced</option>
-                      <option value="concise">Concise</option>
-                      <option value="detailed">Detailed</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {step === 3 && (
-            <div>
-              <h2 className="text-xl font-medium text-white mb-6">Add knowledge base</h2>
-              
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Company context
+              <div>
+                <label htmlFor="description" className="block text-sm font-medium text-white mb-2">
+                  Description <span className="text-red-500">*</span>
                 </label>
                 <textarea
-                  value={formData.knowledge_base}
-                  onChange={(e) => setFormData({ ...formData, knowledge_base: e.target.value })}
-                  rows={8}
-                  className="w-full rounded-md border border-gray-800 bg-black px-4 py-2 font-mono text-sm text-white placeholder-gray-500 focus:border-white focus:outline-none"
-                  placeholder="Paste your company policies, procedures, and documentation here..."
+                  id="description"
+                  value={formData.description}
+                  onChange={(e) => {
+                    setFormData({ ...formData, description: e.target.value });
+                    if (errors.description) setErrors({ ...errors, description: '' });
+                  }}
+                  rows={3}
+                  className={`w-full rounded-lg border ${errors.description ? 'border-red-500' : 'border-gray-800'} bg-gray-950 px-4 py-3 text-white placeholder-gray-500 focus:border-white focus:outline-none focus:ring-1 focus:ring-white`}
+                  placeholder="Describe what this agent will help with..."
+                />
+                {errors.description && <p className="mt-2 text-sm text-red-500">{errors.description}</p>}
+              </div>
+
+              <div>
+                <label htmlFor="welcome" className="block text-sm font-medium text-white mb-2">
+                  Welcome Message
+                </label>
+                <input
+                  id="welcome"
+                  type="text"
+                  value={formData.welcome_message}
+                  onChange={(e) => setFormData({ ...formData, welcome_message: e.target.value })}
+                  className="w-full rounded-lg border border-gray-800 bg-gray-950 px-4 py-3 text-white placeholder-gray-500 focus:border-white focus:outline-none focus:ring-1 focus:ring-white"
+                  placeholder="Hello! I'm here to help with your HR questions."
+                />
+                <p className="mt-2 text-sm text-gray-400">The first message users will hear when they start a conversation</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Behavior Configuration */}
+          <div className="border-b border-gray-800 pb-12">
+            <h2 className="text-2xl font-semibold text-white mb-8">Behavior Configuration</h2>
+            <div className="grid gap-6 sm:grid-cols-2">
+              <div>
+                <label htmlFor="personality" className="block text-sm font-medium text-white mb-2">
+                  Personality
+                </label>
+                <select
+                  id="personality"
+                  value={formData.personality}
+                  onChange={(e) => setFormData({ ...formData, personality: e.target.value })}
+                  className="w-full rounded-lg border border-gray-800 bg-gray-950 px-4 py-3 text-white focus:border-white focus:outline-none focus:ring-1 focus:ring-white"
+                >
+                  <option value="professional">Professional</option>
+                  <option value="friendly">Friendly</option>
+                  <option value="empathetic">Empathetic</option>
+                  <option value="direct">Direct</option>
+                </select>
+              </div>
+
+              <div>
+                <label htmlFor="response_style" className="block text-sm font-medium text-white mb-2">
+                  Response Style
+                </label>
+                <select
+                  id="response_style"
+                  value={formData.response_style}
+                  onChange={(e) => setFormData({ ...formData, response_style: e.target.value })}
+                  className="w-full rounded-lg border border-gray-800 bg-gray-950 px-4 py-3 text-white focus:border-white focus:outline-none focus:ring-1 focus:ring-white"
+                >
+                  <option value="balanced">Balanced</option>
+                  <option value="concise">Concise</option>
+                  <option value="detailed">Detailed</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Knowledge Base */}
+          <div className="pb-12">
+            <h2 className="text-2xl font-semibold text-white mb-8">Knowledge Base</h2>
+            
+            <div className="space-y-6">
+              <div>
+                <label htmlFor="company_context" className="block text-sm font-medium text-white mb-2">
+                  Company Context
+                </label>
+                <textarea
+                  id="company_context"
+                  value={formData.company_context}
+                  onChange={(e) => setFormData({ ...formData, company_context: e.target.value })}
+                  rows={4}
+                  className="w-full rounded-lg border border-gray-800 bg-gray-950 px-4 py-3 text-white placeholder-gray-500 focus:border-white focus:outline-none focus:ring-1 focus:ring-white font-mono text-sm"
+                  placeholder="Company name, industry, size, culture, values..."
                 />
               </div>
 
-              <div className="rounded-lg border-2 border-dashed border-gray-800 p-8 text-center">
-                <svg className="mx-auto h-12 w-12 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                </svg>
-                <p className="mt-4 text-sm text-gray-400">
-                  Drop files here or click to upload
-                </p>
-                <p className="mt-1 text-xs text-gray-500">
-                  PDF, TXT, DOC, DOCX up to 10MB
-                </p>
-                <button type="button" className="mt-4 rounded-md border border-gray-700 px-4 py-2 text-sm font-medium text-white hover:bg-gray-900">
-                  Choose files
-                </button>
+              <div>
+                <label htmlFor="knowledge_base" className="block text-sm font-medium text-white mb-2">
+                  Policies & Documentation
+                </label>
+                <textarea
+                  id="knowledge_base"
+                  value={formData.knowledge_base}
+                  onChange={(e) => setFormData({ ...formData, knowledge_base: e.target.value })}
+                  rows={10}
+                  className="w-full rounded-lg border border-gray-800 bg-gray-950 px-4 py-3 text-white placeholder-gray-500 focus:border-white focus:outline-none focus:ring-1 focus:ring-white font-mono text-sm"
+                  placeholder="Paste your company policies, procedures, FAQs, and documentation here..."
+                />
+                <p className="mt-2 text-sm text-gray-400">This information will be used to provide accurate, company-specific responses</p>
               </div>
             </div>
-          )}
-        </div>
+          </div>
 
-        <div className="mt-8 flex items-center justify-between">
-          <button
-            onClick={handleBack}
-            disabled={step === 1}
-            className={`rounded-md px-4 py-2 text-sm font-medium ${
-              step === 1
-                ? "text-gray-500 cursor-not-allowed"
-                : "text-white hover:bg-gray-900"
-            }`}
-          >
-            Back
-          </button>
-          
-          <div className="flex gap-3">
+          {/* Form Actions */}
+          <div className="flex items-center justify-between border-t border-gray-800 pt-8">
             <Link
               href="/"
-              className="rounded-md border border-gray-700 px-4 py-2 text-sm font-medium text-white hover:bg-gray-900"
+              className="text-sm text-gray-400 hover:text-white"
             >
               Cancel
             </Link>
-            {step < 3 ? (
-              <button
-                onClick={handleNext}
-                disabled={step === 1 && !formData.template}
-                className="rounded-md bg-white px-4 py-2 text-sm font-medium text-black hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Continue
-              </button>
-            ) : (
-              <button 
-                onClick={handleCreateAgent}
-                disabled={isSubmitting}
-                className="rounded-md bg-white px-4 py-2 text-sm font-medium text-black hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isSubmitting ? 'Creating...' : 'Create agent'}
-              </button>
-            )}
+            
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="rounded-lg bg-white px-6 py-3 text-sm font-medium text-black hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-black disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {isSubmitting ? (
+                <span className="flex items-center gap-2">
+                  <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Creating agent...
+                </span>
+              ) : (
+                'Create agent'
+              )}
+            </button>
           </div>
-        </div>
+        </form>
       </div>
-    </AppLayout>
+    </div>
   );
 }
