@@ -110,21 +110,30 @@ export default function AgentChatPage({
       
       // Set up event listeners
       vapiInstance.on('call-start', () => {
-        console.log('Call started');
+        console.log('✅ Call started');
         setIsCallActive(true);
       });
 
       vapiInstance.on('call-end', () => {
-        console.log('Call ended');
+        console.log('❌ Call ended');
         setIsCallActive(false);
       });
 
       vapiInstance.on('speech-start', () => {
-        console.log('User started speaking');
+        console.log('🎤 User started speaking');
       });
 
       vapiInstance.on('speech-end', () => {
-        console.log('User stopped speaking');
+        console.log('🔇 User stopped speaking');
+      });
+      
+      // Add more debug listeners
+      vapiInstance.on('volume-level', (level: number) => {
+        console.log('Volume level:', level);
+      });
+      
+      vapiInstance.on('message', (message: any) => {
+        console.log('📨 VAPI Message:', message.type, message);
       });
 
       vapiInstance.on('error', (error: any) => {
@@ -153,11 +162,7 @@ export default function AgentChatPage({
           }
         }
         
-        if (message.type === 'function-call' && message.functionCall?.name === 'processWithN8N') {
-          // Process with n8n
-          const response = await processWithN8N(message.functionCall.parameters);
-          return { result: response };
-        }
+        // Functions disabled for now
       });
 
       setVapi(vapiInstance);
@@ -223,26 +228,40 @@ export default function AgentChatPage({
       })) || [];
 
       // Prepare the system message
-      const systemMessage = `You are ${agent.name}. ${agent.description}
+      const systemMessage = agent.system_prompt || `You are ${agent.name}. ${agent.description}
                 
 Personality: ${agent.personality}
 Response Style: ${agent.response_style}
 Company Context: ${agent.company_context || 'N/A'}
-Knowledge Base: ${agent.knowledge_base || 'N/A'}
-
-${context.length > 0 ? `Previous conversation context:\n${context.map(m => `${m.role}: ${m.content}`).join('\n')}` : ''}
-
-Important: When you need to process complex requests or access external data, call the processWithN8N function.`;
+Knowledge Base: ${agent.knowledge_base || 'N/A'}`;
 
       console.log('Starting VAPI call...');
       console.log('Agent has VAPI assistant ID:', agent.vapi_assistant_id);
       console.log('Using system message length:', systemMessage.length);
+      
+      // Validate assistant if using pre-created one
+      if (agent.vapi_assistant_id) {
+        console.log('Validating VAPI assistant...');
+        const validateResponse = await fetch('/api/vapi/validate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ assistantId: agent.vapi_assistant_id })
+        });
+        
+        const validation = await validateResponse.json();
+        if (!validation.valid) {
+          console.error('Assistant validation failed:', validation.error);
+          alert('VAPI assistant not found. Creating inline assistant instead.');
+          agent.vapi_assistant_id = null; // Force inline creation
+        } else {
+          console.log('Assistant validated:', validation.assistant);
+        }
+      }
 
       // Start VAPI call - use assistant ID if available, otherwise create inline
       const vapiConfig: any = agent.vapi_assistant_id 
-        ? {
-            assistantId: agent.vapi_assistant_id
-          }
+        ? agent.vapi_assistant_id // Pass the assistant ID directly as a string
+          
         : {
             assistant: {
               firstMessage: agent.welcome_message || `Hello! I'm ${agent.name}. How can I help you today?`,
@@ -256,41 +275,25 @@ Important: When you need to process complex requests or access external data, ca
                 model: "tts-1",
                 voiceId: "alloy",
               },
-              silenceTimeoutSeconds: 30,
-              functions: [
-                {
-                  name: "processWithN8N",
-                  description: "Process user request through n8n workflow for complex queries",
-                  parameters: {
-                    type: "object",
-                    properties: {
-                      userMessage: { 
-                        type: "string",
-                        description: "The user's message or request"
-                      },
-                      agentId: { 
-                        type: "string",
-                        description: "The ID of the current agent"
-                      },
-                      conversationId: { 
-                        type: "string",
-                        description: "The ID of the current conversation"
-                      }
-                    },
-                    required: ["userMessage"]
-                  }
-                }
-              ]
+              silenceTimeoutSeconds: 30
             }
           };
       
-      console.log('VAPI config:', JSON.stringify(vapiConfig, null, 2));
+      console.log('VAPI config:', typeof vapiConfig === 'string' ? `Assistant ID: ${vapiConfig}` : JSON.stringify(vapiConfig, null, 2));
       
       try {
-        await vapi.start(vapiConfig);
-        console.log('VAPI call started successfully');
+        console.log('🚀 Calling vapi.start()...');
+        console.log('Config type:', typeof vapiConfig);
+        const result = await vapi.start(vapiConfig);
+        console.log('✅ VAPI call started successfully:', result);
       } catch (startError) {
-        console.error('Error starting VAPI:', startError);
+        console.error('❌ Error starting VAPI:', startError);
+        if (startError instanceof Error) {
+          console.error('Error details:', {
+            message: startError.message,
+            stack: startError.stack
+          });
+        }
         throw startError;
       }
     } catch (error) {
