@@ -126,7 +126,7 @@ async function createVAPIAssistant(agent: any) {
       functions: [
         {
           name: 'processWithN8N',
-          description: 'Process complex requests through n8n workflow',
+          description: 'Process user questions and requests through the n8n workflow to get accurate HR information',
           parameters: {
             type: 'object',
             properties: {
@@ -145,11 +145,29 @@ async function createVAPIAssistant(agent: any) {
             },
             required: ['userMessage']
           }
+        },
+        {
+          name: 'addDocument',
+          description: 'Add new information or documents to the HR knowledge base',
+          parameters: {
+            type: 'object',
+            properties: {
+              document: {
+                type: 'string',
+                description: 'The document content or information to add'
+              },
+              agentId: {
+                type: 'string',
+                description: 'The ID of the current agent'
+              }
+            },
+            required: ['document']
+          }
         }
       ],
       serverUrl: process.env.NEXT_PUBLIC_APP_URL ? 
-        `${process.env.NEXT_PUBLIC_APP_URL}/api/vapi/webhook/${agent.id}` : 
-        undefined,
+        `${process.env.NEXT_PUBLIC_APP_URL}/api/vapi/functions` : 
+        'http://localhost:3000/api/vapi/functions',
     }
     
     console.log('Creating VAPI assistant with payload:', JSON.stringify(vapiPayload, null, 2))

@@ -162,7 +162,10 @@ export default function AgentChatPage({
           }
         }
         
-        // Functions disabled for now
+        if (message.type === 'function-call' && message.functionCall?.name === 'processWithN8N') {
+          console.log('🔧 Function call detected:', message.functionCall);
+          // VAPI will handle the function call via serverUrl
+        }
       });
 
       setVapi(vapiInstance);
@@ -275,7 +278,28 @@ Knowledge Base: ${agent.knowledge_base || 'N/A'}`;
                 model: "tts-1",
                 voiceId: "alloy",
               },
-              silenceTimeoutSeconds: 30
+              silenceTimeoutSeconds: 30,
+              functions: [
+                {
+                  name: "processWithN8N",
+                  description: "Process complex HR requests that need additional data or processing",
+                  parameters: {
+                    type: "object",
+                    properties: {
+                      userMessage: { 
+                        type: "string",
+                        description: "The user's message or request"
+                      },
+                      agentId: { 
+                        type: "string",
+                        description: "The ID of the current agent"
+                      }
+                    },
+                    required: ["userMessage"]
+                  }
+                }
+              ],
+              serverUrl: 'http://localhost:3000/api/vapi/functions'
             }
           };
       
