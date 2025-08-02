@@ -10,6 +10,7 @@ interface Agent {
   name: string;
   description: string;
   status: "active" | "inactive" | "training";
+  conversation_count?: number;
   created_at: string;
   updated_at: string;
 }
@@ -155,6 +156,7 @@ export default function Home() {
               description={agent.description || ''}
               status={agent.status}
               lastActive={getRelativeTime(agent.updated_at)}
+              conversationCount={agent.conversation_count || 0}
               onDelete={() => handleDeleteAgent(agent.id, agent.name)}
             />
           ))

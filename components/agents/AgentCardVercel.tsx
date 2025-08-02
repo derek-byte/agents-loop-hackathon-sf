@@ -7,7 +7,7 @@ interface AgentCardProps {
   description: string;
   status: "active" | "inactive" | "training";
   lastActive?: string;
-  domain?: string;
+  conversationCount?: number;
   onDelete?: () => void;
 }
 
@@ -15,8 +15,8 @@ export default function AgentCardVercel({
   name,
   description,
   status,
-  lastActive = "2 hours ago",
-  domain = "hr-agent.company.com",
+  lastActive = "Just now",
+  conversationCount = 0,
   onDelete
 }: AgentCardProps) {
   const [showMenu, setShowMenu] = useState(false);
@@ -49,8 +49,7 @@ export default function AgentCardVercel({
             <h3 className="text-lg font-medium text-white">{name}</h3>
             <span className={`h-2 w-2 rounded-full ${statusColors[status]}`} />
           </div>
-          <p className="text-sm text-gray-400 mb-3">{description}</p>
-          <p className="text-xs text-gray-500">{domain}</p>
+          <p className="text-sm text-gray-400">{description}</p>
         </div>
         
         <div className="relative" ref={menuRef}>
@@ -99,7 +98,7 @@ export default function AgentCardVercel({
           <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
           </svg>
-          234 conversations
+          {conversationCount} conversations
         </span>
       </div>
     </div>
