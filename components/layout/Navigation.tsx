@@ -2,9 +2,15 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { signOut, useSession } from "next-auth/react";
 
 export default function Navigation() {
   const pathname = usePathname();
+  const { data: session } = useSession();
+
+  const handleLogout = () => {
+    signOut({ callbackUrl: "/login" });
+  };
 
   const navItems = [
     { label: "Overview", href: "/" },
@@ -18,13 +24,8 @@ export default function Navigation() {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-16 items-center justify-between">
           <div className="flex items-center gap-8">
-            <Link href="/" className="flex items-center gap-2">
-              <div className="h-8 w-8 rounded-lg bg-white flex items-center justify-center">
-                <svg className="h-5 w-5 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-              </div>
-              <span className="text-lg font-semibold text-white">HR Agent Hub</span>
+            <Link href="/" className="flex items-center">
+              <span className="text-lg font-semibold text-white">FleetAgents</span>
             </Link>
             
             <nav className="hidden md:flex items-center gap-1">
@@ -59,11 +60,21 @@ export default function Navigation() {
 
             <div className="h-8 w-px bg-gray-800" />
             
-            <button className="flex items-center gap-2 text-sm">
-              <div className="h-8 w-8 rounded-full bg-gray-800 flex items-center justify-center">
-                <span className="text-xs font-medium text-white">JD</span>
-              </div>
-            </button>
+            <div className="flex items-center gap-2">
+              <button className="flex items-center gap-2 text-sm">
+                <div className="h-8 w-8 rounded-full bg-gray-800 flex items-center justify-center">
+                  <span className="text-xs font-medium text-white">
+                    {session?.user?.name?.charAt(0).toUpperCase() || "U"}
+                  </span>
+                </div>
+              </button>
+              <button 
+                onClick={handleLogout}
+                className="text-gray-400 hover:text-white text-sm"
+              >
+                Sign out
+              </button>
+            </div>
           </div>
         </div>
       </div>
