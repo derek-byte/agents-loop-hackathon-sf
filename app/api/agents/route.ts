@@ -167,7 +167,7 @@ async function createVAPIAssistant(agent: any) {
       ],
       serverUrl: process.env.NEXT_PUBLIC_APP_URL ? 
         `${process.env.NEXT_PUBLIC_APP_URL}/api/vapi/functions` : 
-        'http://localhost:3000/api/vapi/functions',
+        undefined, // VAPI requires HTTPS, so no serverUrl for localhost
     }
     
     console.log('Creating VAPI assistant with payload:', JSON.stringify(vapiPayload, null, 2))

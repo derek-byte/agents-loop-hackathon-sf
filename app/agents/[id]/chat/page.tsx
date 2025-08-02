@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
+import { useState, useEffect, use, useRef } from "react";
 import { useRouter } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
 import { createClient } from "@/lib/supabase/client";
@@ -35,6 +35,7 @@ export default function AgentChatPage({
   const [vapi, setVapi] = useState<any>(null);
   const [isCallActive, setIsCallActive] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
+  const conversationIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     // Check if agent is deleted before fetching
@@ -47,6 +48,14 @@ export default function AgentChatPage({
     fetchAgent();
     initializeVapi();
   }, [id, isDeleted, router]);
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    conversationIdRef.current = conversationId;
+    if (conversationId) {
+      console.log('Conversation ID updated in ref:', conversationId);
+    }
+  }, [conversationId]);
 
   const fetchAgent = async () => {
     try {
@@ -149,17 +158,38 @@ export default function AgentChatPage({
 
       vapiInstance.on('message', async (message: any) => {
         console.log('VAPI Message:', message);
+        console.log('Message structure:', JSON.stringify(message, null, 2));
         
-        // Handle different message types
-        if (message.type === 'transcript' && message.role === 'user') {
-          // Save user message
-          if (conversationId) {
-            await supabase.from('messages').insert({
-              conversation_id: conversationId,
-              role: 'user',
-              content: message.text
-            });
+        // Save transcripts to database
+        if (message.type === 'transcript' && conversationIdRef.current) {
+          if (message.role === 'user' || message.role === 'assistant') {
+            // VAPI might use 'content' or 'text' for the message
+            const messageContent = message.text || message.content || message.transcript;
+            console.log(`Saving ${message.role} message:`, messageContent);
+            console.log('Using conversation ID:', conversationIdRef.current);
+            
+            if (!messageContent) {
+              console.error('No message content found in:', message);
+              return;
+            }
+            
+            try {
+              const { error } = await supabase.from('messages').insert({
+                conversation_id: conversationIdRef.current,
+                role: message.role,
+                content: messageContent
+              });
+              if (error) {
+                console.error('Supabase insert error:', error);
+              } else {
+                console.log(`✅ Successfully saved ${message.role} message`);
+              }
+            } catch (error) {
+              console.error('Error saving message:', error);
+            }
           }
+        } else if (message.type === 'transcript') {
+          console.log('⚠️ Cannot save message - no conversation ID yet');
         }
         
         if (message.type === 'function-call' && message.functionCall?.name === 'processWithN8N') {
@@ -195,10 +225,51 @@ export default function AgentChatPage({
         return;
       }
 
-      // Create a new conversation if we don't have one
+      // Get previous conversations for context
+      console.log('Loading conversation history...');
+      const { data: previousConversations } = await supabase
+        .from('conversations')
+        .select(`
+          id,
+          created_at,
+          messages (
+            role,
+            content,
+            created_at
+          )
+        `)
+        .eq('agent_id', agent.id)
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(3); // Get last 3 conversations
+      
+      // Format conversation history for context
+      let conversationHistory = '';
+      if (previousConversations && previousConversations.length > 0) {
+        console.log(`Found ${previousConversations.length} previous conversations`);
+        conversationHistory = '\n\nPREVIOUS CONVERSATIONS WITH THIS USER:\n';
+        
+        previousConversations.forEach((conv, idx) => {
+          if (conv.messages && conv.messages.length > 0) {
+            const date = new Date(conv.created_at).toLocaleDateString();
+            conversationHistory += `\n--- Conversation from ${date} ---\n`;
+            
+            // Take last 10 messages from each conversation
+            const recentMessages = conv.messages.slice(-10);
+            recentMessages.forEach((msg: any) => {
+              conversationHistory += `${msg.role.toUpperCase()}: ${msg.content}\n`;
+            });
+          }
+        });
+        
+        conversationHistory += '\n--- END OF PREVIOUS CONVERSATIONS ---\n';
+      }
+      
+      // Create a new conversation FIRST before starting VAPI
       let currentConversationId = conversationId;
       
       if (!currentConversationId) {
+        console.log('Creating new conversation...');
         const { data: newConversation, error: convError } = await supabase
           .from('conversations')
           .insert({
@@ -214,7 +285,11 @@ export default function AgentChatPage({
         }
 
         currentConversationId = newConversation.id;
+        console.log('Created conversation with ID:', currentConversationId);
+        
+        // Set both state and ref immediately
         setConversationId(currentConversationId);
+        conversationIdRef.current = currentConversationId;
       }
 
       // Get previous messages for context
@@ -230,17 +305,26 @@ export default function AgentChatPage({
         content: msg.content
       })) || [];
 
-      // Prepare the system message
-      const systemMessage = agent.system_prompt || `You are ${agent.name}. ${agent.description}
+      // Prepare the system message with conversation history
+      const baseSystemPrompt = agent.system_prompt || `You are ${agent.name}. ${agent.description}
                 
 Personality: ${agent.personality}
 Response Style: ${agent.response_style}
 Company Context: ${agent.company_context || 'N/A'}
 Knowledge Base: ${agent.knowledge_base || 'N/A'}`;
+      
+      const systemMessage = baseSystemPrompt + conversationHistory + `
+
+IMPORTANT CONTEXT INSTRUCTIONS:
+- Reference previous conversations naturally when relevant
+- Remember user preferences and information they've shared
+- If the user asks about something discussed before, acknowledge it
+- Build on previous interactions to provide personalized assistance`;
 
       console.log('Starting VAPI call...');
       console.log('Agent has VAPI assistant ID:', agent.vapi_assistant_id);
-      console.log('Using system message length:', systemMessage.length);
+      console.log('System message length:', systemMessage.length);
+      console.log('Conversation history included:', conversationHistory.length > 0 ? 'Yes' : 'No');
       
       // Validate assistant if using pre-created one
       if (agent.vapi_assistant_id) {
@@ -261,47 +345,44 @@ Knowledge Base: ${agent.knowledge_base || 'N/A'}`;
         }
       }
 
-      // Start VAPI call - use assistant ID if available, otherwise create inline
-      const vapiConfig: any = agent.vapi_assistant_id 
-        ? agent.vapi_assistant_id // Pass the assistant ID directly as a string
-          
-        : {
-            assistant: {
-              firstMessage: agent.welcome_message || `Hello! I'm ${agent.name}. How can I help you today?`,
-              model: {
-                provider: "openai",
-                model: "gpt-4",
-                systemPrompt: systemMessage,
-              },
-              voice: {
-                provider: "openai",
-                model: "tts-1",
-                voiceId: "alloy",
-              },
-              silenceTimeoutSeconds: 30,
-              functions: [
-                {
-                  name: "processWithN8N",
-                  description: "Process complex HR requests that need additional data or processing",
-                  parameters: {
-                    type: "object",
-                    properties: {
-                      userMessage: { 
-                        type: "string",
-                        description: "The user's message or request"
-                      },
-                      agentId: { 
-                        type: "string",
-                        description: "The ID of the current agent"
-                      }
-                    },
-                    required: ["userMessage"]
-                  }
+      // Start VAPI call - create inline assistant to include conversation history
+      const vapiConfig: any = {
+        firstMessage: agent.welcome_message || `Hello! I'm ${agent.name}. How can I help you today?`,
+        model: {
+          provider: "openai",
+          model: "gpt-4",
+          systemPrompt: systemMessage, // This includes conversation history
+        },
+        voice: {
+          provider: "openai",
+          model: "tts-1",
+          voiceId: "alloy",
+        },
+        silenceTimeoutSeconds: 30,
+        functions: [
+          {
+            name: "processWithN8N",
+            description: "Process complex HR requests that need additional data or processing",
+            parameters: {
+              type: "object",
+              properties: {
+                userMessage: { 
+                  type: "string",
+                  description: "The user's message or request"
+                },
+                agentId: { 
+                  type: "string",
+                  description: "The ID of the current agent"
                 }
-              ],
-              serverUrl: 'http://localhost:3000/api/vapi/functions'
+              },
+              required: ["userMessage"]
             }
-          };
+          }
+        ],
+        serverUrl: process.env.NEXT_PUBLIC_APP_URL ? 
+          `${process.env.NEXT_PUBLIC_APP_URL}/api/vapi/functions` : 
+          undefined // Skip serverUrl on localhost - functions won't work locally
+      };
       
       console.log('VAPI config:', typeof vapiConfig === 'string' ? `Assistant ID: ${vapiConfig}` : JSON.stringify(vapiConfig, null, 2));
       

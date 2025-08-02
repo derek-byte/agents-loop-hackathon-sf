@@ -46,10 +46,49 @@ async function handleN8NProcess(params: any) {
   const { userMessage, agentId, context } = params
   
   try {
+    // Get conversation history from Supabase
+    const supabase = await createClient()
+    let conversationHistory = ''
+    
+    if (agentId) {
+      // Get user info from the current session
+      const { data: { user } } = await supabase.auth.getUser()
+      
+      if (user) {
+        // Fetch previous conversations
+        const { data: conversations } = await supabase
+          .from('conversations')
+          .select(`
+            id,
+            created_at,
+            messages (
+              role,
+              content,
+              created_at
+            )
+          `)
+          .eq('agent_id', agentId)
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(3)
+        
+        if (conversations && conversations.length > 0) {
+          conversationHistory = 'Previous conversations:\n'
+          conversations.forEach(conv => {
+            if (conv.messages && conv.messages.length > 0) {
+              conv.messages.slice(-5).forEach((msg: any) => {
+                conversationHistory += `${msg.role}: ${msg.content}\n`
+              })
+            }
+          })
+        }
+      }
+    }
+    
     // Use the agent-response webhook for processing user queries
     const n8nWebhookUrl = 'https://adrian-ctluk.app.n8n.cloud/webhook/agent-response'
     
-    console.log('Calling n8n agent-response webhook...')
+    console.log('Calling n8n agent-response webhook with conversation history...')
     
     const n8nResponse = await fetch(n8nWebhookUrl, {
       method: 'POST',
@@ -60,6 +99,7 @@ async function handleN8NProcess(params: any) {
         text: userMessage,
         agentId: agentId,
         context: context,
+        conversationHistory: conversationHistory,
         timestamp: new Date().toISOString()
       })
     })
