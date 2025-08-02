@@ -1,10 +1,23 @@
 "use client";
 
-import { signIn } from "next-auth/react";
+import { createClient } from '@/lib/supabase/client'
+import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
-  const handleGoogleLogin = () => {
-    signIn("google", { callbackUrl: "/" });
+  const router = useRouter();
+  const supabase = createClient();
+
+  const handleGoogleLogin = async () => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
+    });
+
+    if (error) {
+      console.error('Error during authentication:', error);
+    }
   };
 
   return (

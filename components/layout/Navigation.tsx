@@ -1,15 +1,35 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { signOut, useSession } from "next-auth/react";
+import { usePathname, useRouter } from "next/navigation";
+import { createClient } from '@/lib/supabase/client';
+import { useEffect, useState } from 'react';
+import type { User } from '@supabase/supabase-js';
 
 export default function Navigation() {
   const pathname = usePathname();
-  const { data: session } = useSession();
+  const router = useRouter();
+  const supabase = createClient();
+  const [user, setUser] = useState<User | null>(null);
 
-  const handleLogout = () => {
-    signOut({ callbackUrl: "/login" });
+  useEffect(() => {
+    const getUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setUser(user);
+    };
+
+    getUser();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => subscription.unsubscribe();
+  }, [supabase]);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push('/login');
   };
 
   const navItems = [
@@ -64,7 +84,7 @@ export default function Navigation() {
               <button className="flex items-center gap-2 text-sm">
                 <div className="h-8 w-8 rounded-full bg-gray-800 flex items-center justify-center">
                   <span className="text-xs font-medium text-white">
-                    {session?.user?.name?.charAt(0).toUpperCase() || "U"}
+                    {user?.email?.charAt(0).toUpperCase() || "U"}
                   </span>
                 </div>
               </button>
